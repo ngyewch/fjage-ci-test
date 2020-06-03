@@ -5,44 +5,58 @@ import org.arl.fjage.param.Parameter;
 import org.arl.fjage.param.ParameterMessageBehavior;
 import org.arl.fjage.param.ParameterReq;
 import org.arl.fjage.param.ParameterRsp;
-import org.junit.Assume;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+import java.util.Arrays;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertTrue;
 
-public abstract class AbstractParamTest {
+@RunWith(Parameterized.class)
+public class ParamTest
+    extends AbstractConditionalSkipTest {
 
   private final Logger log = Logger.getLogger(getClass().getName());
 
-  @Rule
-  public TestName testName = new TestName();
+  @org.junit.runners.Parameterized.Parameter(0)
+  public String platformId;
 
-  protected abstract Platform newPlatform();
+  @org.junit.runners.Parameterized.Parameter(1)
+  public Platform platform;
 
-  protected abstract int getRequestTimeout();
+  @org.junit.runners.Parameterized.Parameter(2)
+  public int requestTimeout;
 
-  protected abstract boolean shouldSkip(TestName testName);
+  @Parameterized.Parameters(name = "platform={0}, requestTimeout={2}ms")
+  public static Iterable<Object[]> data() {
+    return Arrays.asList(new Object[][]{
+        {"RealTimePlatform", new RealTimePlatform(), 1000},
+        {"DiscreteEventSimulator", new DiscreteEventSimulator(), 1000},
+    });
+  }
+
+  @Override
+  protected boolean shouldSkip() {
+    return (isRunningInCI() && platformId.equals("RealTimePlatform"));
+  }
 
   @Before
   public void beforeParamTest() {
-    Assume.assumeFalse(shouldSkip(testName));
     LogFormatter.install(null);
   }
 
   @Test
+  @Skippable
   public void testParam1() {
     log.info("testParam1");
-    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(true);
-    ParamClientAgent client1 = new ParamClientAgent(true, getRequestTimeout());
-    ParamClientAgent client2 = new ParamClientAgent(true, getRequestTimeout());
-    ParamClientAgent client3 = new ParamClientAgent(true, getRequestTimeout());
+    ParamClientAgent client1 = new ParamClientAgent(true, requestTimeout);
+    ParamClientAgent client2 = new ParamClientAgent(true, requestTimeout);
+    ParamClientAgent client3 = new ParamClientAgent(true, requestTimeout);
     container.add("S", server);
     container.add("C1", client1);
     container.add("C2", client2);
@@ -64,14 +78,14 @@ public abstract class AbstractParamTest {
   }
 
   @Test
+  @Skippable
   public void testParam2() {
     log.info("testParam2");
-    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(false);
-    ParamClientAgent client1 = new ParamClientAgent(false, getRequestTimeout());
-    ParamClientAgent client2 = new ParamClientAgent(false, getRequestTimeout());
-    ParamClientAgent client3 = new ParamClientAgent(false, getRequestTimeout());
+    ParamClientAgent client1 = new ParamClientAgent(false, requestTimeout);
+    ParamClientAgent client2 = new ParamClientAgent(false, requestTimeout);
+    ParamClientAgent client3 = new ParamClientAgent(false, requestTimeout);
     container.add("S", server);
     container.add("C1", client1);
     container.add("C2", client2);
@@ -93,9 +107,9 @@ public abstract class AbstractParamTest {
   }
 
   @Test
+  @Skippable
   public void testAIDParam() {
     log.info("testAIDParam");
-    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(false);
     AIDParamClientAgent client1 = new AIDParamClientAgent();
