@@ -5,39 +5,51 @@ import org.arl.fjage.param.Parameter;
 import org.arl.fjage.param.ParameterMessageBehavior;
 import org.arl.fjage.param.ParameterReq;
 import org.arl.fjage.param.ParameterRsp;
+import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertTrue;
 
-public class ParamTest {
+public abstract class AbstractParamTest {
 
   private final Logger log = Logger.getLogger(getClass().getName());
 
+  @Rule
+  public TestName testName = new TestName();
+
+  protected abstract Platform newPlatform();
+
+  protected abstract int getRequestTimeout();
+
+  protected abstract boolean shouldSkip(TestName testName);
+
   @Before
-  public void beforeTesting() {
+  public void beforeParamTest() {
+    Assume.assumeFalse(shouldSkip(testName));
     LogFormatter.install(null);
   }
 
   @Test
   public void testParam1() {
     log.info("testParam1");
-    Platform platform = new RealTimePlatform();
+    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(true);
-    ParamClientAgent client1 = new ParamClientAgent(true);
-    ParamClientAgent client2 = new ParamClientAgent(true);
-    ParamClientAgent client3 = new ParamClientAgent(true);
+    ParamClientAgent client1 = new ParamClientAgent(true, getRequestTimeout());
+    ParamClientAgent client2 = new ParamClientAgent(true, getRequestTimeout());
+    ParamClientAgent client3 = new ParamClientAgent(true, getRequestTimeout());
     container.add("S", server);
     container.add("C1", client1);
     container.add("C2", client2);
     container.add("C3", client3);
     platform.start();
     platform.delay(10000);
-    platform.shutdown();
-    platform.delay(2000);
+    shutdown(platform);
     log.info("Successful: " + (client1.count + client2.count + client3.count));
     log.info("Warnings: " + (client1.warnings + client2.warnings + client3.errors));
     log.info("Errors: " + (server.errors + client1.errors + client2.errors + client3.errors));
@@ -54,20 +66,19 @@ public class ParamTest {
   @Test
   public void testParam2() {
     log.info("testParam2");
-    Platform platform = new RealTimePlatform();
+    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(false);
-    ParamClientAgent client1 = new ParamClientAgent(false);
-    ParamClientAgent client2 = new ParamClientAgent(false);
-    ParamClientAgent client3 = new ParamClientAgent(false);
+    ParamClientAgent client1 = new ParamClientAgent(false, getRequestTimeout());
+    ParamClientAgent client2 = new ParamClientAgent(false, getRequestTimeout());
+    ParamClientAgent client3 = new ParamClientAgent(false, getRequestTimeout());
     container.add("S", server);
     container.add("C1", client1);
     container.add("C2", client2);
     container.add("C3", client3);
     platform.start();
     platform.delay(10000);
-    platform.shutdown();
-    platform.delay(2000);
+    shutdown(platform);
     log.info("Successful: " + (client1.count + client2.count + client3.count));
     log.info("Warnings: " + (client1.warnings + client2.warnings + client3.errors));
     log.info("Errors: " + (server.errors + client1.errors + client2.errors + client3.errors));
@@ -84,7 +95,7 @@ public class ParamTest {
   @Test
   public void testAIDParam() {
     log.info("testAIDParam");
-    Platform platform = new RealTimePlatform();
+    Platform platform = newPlatform();
     Container container = new Container(platform);
     ParamServerAgent server = new ParamServerAgent(false);
     AIDParamClientAgent client1 = new AIDParamClientAgent();
@@ -96,8 +107,7 @@ public class ParamTest {
     container.add("C3", client3);
     platform.start();
     platform.delay(10000);
-    platform.shutdown();
-    platform.delay(2000);
+    shutdown(platform);
     log.info("Successful: " + (client1.count + client2.count + client3.count));
     log.info("Warnings: " + (client1.warnings + client2.warnings + client3.errors));
     log.info("Errors: " + (server.errors + client1.errors + client2.errors + client3.errors));
@@ -109,6 +119,17 @@ public class ParamTest {
     assertTrue(client2.warnings < 3);
     assertTrue(client3.warnings < 3);
     assertTrue(client1.count + client2.count + client3.count > 100);
+  }
+
+  private void shutdown(Platform platform) {
+    platform.shutdown();
+    while (platform.isRunning()) {
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        break;
+      }
+    }
   }
 
   private static class RequestMessage extends Message {
@@ -192,12 +213,15 @@ public class ParamTest {
   }
 
   private static class ParamClientAgent extends Agent {
+    private final int requestTimeout;
+
     public int errors = 0;
     public int warnings = 0;
     public int count = 0;
 
-    public ParamClientAgent(boolean yor) {
+    public ParamClientAgent(boolean yor, int requestTimeout) {
       super();
+      this.requestTimeout = requestTimeout;
       setYieldDuringReceive(yor);
     }
 
@@ -216,7 +240,7 @@ public class ParamTest {
           count++;
           Message req = new ParameterReq().get(Params.x);
           req.setRecipient(server);
-          Message rsp = request(req, 1000);
+          Message rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to get x");
             warnings++;
@@ -229,7 +253,7 @@ public class ParamTest {
           }
           req = new ParameterReq().set(Params.x, 3);
           req.setRecipient(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to set x");
             warnings++;
@@ -242,7 +266,7 @@ public class ParamTest {
           }
           req = new ParameterReq().get(Params.y).get(Params.s);
           req.setRecipient(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to get y and s");
             warnings++;
@@ -261,7 +285,7 @@ public class ParamTest {
           req = new ParameterReq().get(Params.y);
           ((ParameterReq) req).setIndex(7);
           req.setRecipient(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to get y[7]");
             warnings++;
@@ -275,7 +299,7 @@ public class ParamTest {
           req = new ParameterReq().set(Params.x, 2);
           ((ParameterReq) req).setIndex(7);
           req.setRecipient(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to set x[7]");
             warnings++;
@@ -288,7 +312,7 @@ public class ParamTest {
           }
           req = new ParameterReq();
           req.setRecipient(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("Unable to get x, y and s");
             warnings++;
@@ -310,7 +334,7 @@ public class ParamTest {
             }
           }
           req = new RequestMessage(server);
-          rsp = request(req, 1000);
+          rsp = request(req, requestTimeout);
           if (rsp == null) {
             log.warning("No response from server");
             warnings++;
