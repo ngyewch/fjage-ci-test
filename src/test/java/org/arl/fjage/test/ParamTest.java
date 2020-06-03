@@ -1,11 +1,18 @@
 package org.arl.fjage.test;
 
 import org.arl.fjage.*;
+import org.arl.fjage.junit.ConditionalSkipRule;
+import org.arl.fjage.junit.ConditionalSkipSupport;
+import org.arl.fjage.junit.Skippable;
 import org.arl.fjage.param.Parameter;
 import org.arl.fjage.param.ParameterMessageBehavior;
 import org.arl.fjage.param.ParameterReq;
 import org.arl.fjage.param.ParameterRsp;
+import org.arl.fjage.test.support.CIHelper;
+import org.arl.fjage.test.support.PlatformFactory;
+import org.arl.fjage.test.support.PlatformType;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -17,30 +24,37 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class ParamTest
-    extends AbstractConditionalSkipTest {
+    implements ConditionalSkipSupport {
 
   private final Logger log = Logger.getLogger(getClass().getName());
 
-  @org.junit.runners.Parameterized.Parameter(0)
-  public String platformId;
+  @Rule
+  public final ConditionalSkipRule conditionalSkipRule = new ConditionalSkipRule();
 
-  @org.junit.runners.Parameterized.Parameter(1)
+  @Parameterized.Parameter(0)
+  public PlatformType platformType;
+
+  @Parameterized.Parameter(1)
   public Platform platform;
 
-  @org.junit.runners.Parameterized.Parameter(2)
+  @Parameterized.Parameter(2)
   public int requestTimeout;
+
+  private static Object[] createDataElement(PlatformType platformType, int requestTimeout) {
+    return new Object[]{platformType, PlatformFactory.INSTANCE.newPlatform(platformType), requestTimeout};
+  }
 
   @Parameterized.Parameters(name = "platform={0}, requestTimeout={2}ms")
   public static Iterable<Object[]> data() {
-    return Arrays.asList(new Object[][]{
-        {"RealTimePlatform", new RealTimePlatform(), 1000},
-        {"DiscreteEventSimulator", new DiscreteEventSimulator(), 1000},
-    });
+    return Arrays.asList(
+        createDataElement(PlatformType.RealTimePlatform, 1000),
+        createDataElement(PlatformType.DiscreteEventSimulator, 1000)
+        );
   }
 
   @Override
-  protected boolean shouldSkip() {
-    return (isRunningInCI() && platformId.equals("RealTimePlatform"));
+  public boolean shouldSkip() {
+    return (CIHelper.isRunningInCI() && (platformType == PlatformType.RealTimePlatform));
   }
 
   @Before
